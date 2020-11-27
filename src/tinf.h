@@ -1,7 +1,8 @@
 /*
- * tinf - tiny inflate library (inflate, gzip, zlib)
+ * tinf - tiny inflate library (ALTERED)
  *
  * Copyright (c) 2003-2019 Joergen Ibsen
+ * Copyright (c) 2020 Nordic Semiconductor
  *
  * This software is provided 'as-is', without any express or implied
  * warranty. In no event will the authors be held liable for any damages

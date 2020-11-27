@@ -1,17 +1,28 @@
 
-tinf - tiny inflate library
-===========================
+tinf - tiny inflate library (ALTERED)
+=====================================
+
+This is **altered** version of [jibsen/tinf](https://github.com/jibsen/tinf).
+
+Main differences compared to original tinf library:
+  - Memory for the `tinf_data` object is passed, to avoid using more than
+    1k of stack space.
+  - Source and destination buffer reads and writes are done using configurable
+    macros, to allow flexible input/output.
+  - Source code of finfzlib and tinfgzip was not adjusted to above changes, so
+    they was removed to avoid confusion. Tests, tools, examples, makefiles
+    were depending on it, so they were removed too.
+  - Documentation fixes to reflect above changes.
+
+
+About
+-----
 
 Version 1.2.1
 
 Copyright (c) 2003-2019 Joergen Ibsen
 
 <http://www.ibsensoftware.com/>
-
-[![Build Status](https://dev.azure.com/jibsenorg/jibsen/_apis/build/status/jibsen.tinf?branchName=master)](https://dev.azure.com/jibsenorg/jibsen/_build/latest?definitionId=3?branchName=master)
-
-About
------
 
 tinf is a small library implementing the decompression algorithm for the
 [deflate][wpdeflate] compressed data format (called 'inflate'). Deflate
@@ -35,26 +46,9 @@ Usage
 The include file `src/tinf.h` contains documentation in the form of
 [doxygen][] comments.
 
-Wrappers for decompressing zlib and gzip data in memory are supplied.
-
-tgunzip, an example command-line gzip decompressor in C, is included.
-
-tinf uses [CMake][] to generate build systems. To create one for the tools on
-your platform, and build tinf, use something along the lines of:
-
-~~~sh
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build . --config Release
-~~~
-
-You can also simply compile the source files and link them into your project.
-CMake just provides an easy way to build and test across various platforms and
-toolsets.
+You can simply compile the source files and link them into your project.
 
 [doxygen]: http://www.doxygen.org/
-[CMake]: http://www.cmake.org/
 
 
 Notes
@@ -65,12 +59,6 @@ tinf requires int to be at least 32-bit.
 The inflate algorithm and data format are from 'DEFLATE Compressed Data
 Format Specification version 1.3' ([RFC 1951][deflate]).
 
-The zlib data format is from 'ZLIB Compressed Data Format Specification
-version 3.3' ([RFC 1950][zlib]).
-
-The gzip data format is from 'GZIP file format specification version 4.3'
-([RFC 1952][gzip]).
-
 The original version of tinf assumed it was given valid compressed data, and
 that there was sufficient space for the decompressed data. If code size is
 of the utmost importance, and you are absolutely sure you can trust the
@@ -79,15 +67,10 @@ release without security checks).
 
 Ideas for future versions:
 
-  - Memory for the `tinf_data` object should be passed, to avoid using more
-    than 1k of stack space
   - Wrappers for unpacking zip archives and png images
-  - Blocking of some sort, so everything does not have to be in memory
   - Optional table-based Huffman decoder
 
 [deflate]: http://www.rfc-editor.org/rfc/rfc1951.txt
-[zlib]: http://www.rfc-editor.org/rfc/rfc1950.txt
-[gzip]: http://www.rfc-editor.org/rfc/rfc1952.txt
 [tinf110]: https://github.com/jibsen/tinf/releases/tag/v1.1.0
 
 
