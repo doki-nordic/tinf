@@ -32,36 +32,7 @@
 #  error "tinf requires unsigned int to be at least 32-bit"
 #endif
 
-/* -- Internal data structures -- */
-
-struct tinf_tree {
-	unsigned short counts[16]; /* Number of codes with a given length */
-	unsigned short symbols[288]; /* Symbols sorted by code */
-	int max_sym;
-};
-
-struct tinf_data {
-	const unsigned char *source;
-	const unsigned char *source_end;
-	unsigned int tag;
-	int bitcount;
-	int overflow;
-
-	unsigned char *dest_start;
-	unsigned char *dest;
-	unsigned char *dest_end;
-
-	struct tinf_tree ltree; /* Literal/length tree */
-	struct tinf_tree dtree; /* Distance tree */
-};
-
 /* -- Utility functions -- */
-
-static unsigned int read_le16(const unsigned char *p)
-{
-	return ((unsigned int) p[0])
-	     | ((unsigned int) p[1] << 8);
-}
 
 /* Build fixed Huffman trees */
 static void tinf_build_fixed_trees(struct tinf_tree *lt, struct tinf_tree *dt)
@@ -182,7 +153,8 @@ static void tinf_refill(struct tinf_data *d, int num)
 	/* Read bytes until at least num bits available */
 	while (d->bitcount < num) {
 		if (d->source != d->source_end) {
-			d->tag |= (unsigned int) *d->source++ << d->bitcount;
+			d->tag |= (unsigned int) TINF_READ_SOURCE(d->source) << d->bitcount;
+			d->source++;
 		}
 		else {
 			d->overflow = 1;
@@ -428,7 +400,8 @@ static int tinf_inflate_block_data(struct tinf_data *d, struct tinf_tree *lt,
 			if (d->dest == d->dest_end) {
 				return TINF_BUF_ERROR;
 			}
-			*d->dest++ = sym;
+			TINF_WRITE_DEST(d->dest, sym);
+			d->dest++;
 		}
 		else {
 			int length, dist, offs;
@@ -471,7 +444,7 @@ static int tinf_inflate_block_data(struct tinf_data *d, struct tinf_tree *lt,
 
 			/* Copy match */
 			for (i = 0; i < length; ++i) {
-				d->dest[i] = d->dest[i - offs];
+				TINF_WRITE_DEST(&d->dest[i], TINF_READ_DEST(&d->dest[i - offs]));
 			}
 
 			d->dest += length;
@@ -489,17 +462,21 @@ static int tinf_inflate_uncompressed_block(struct tinf_data *d)
 	}
 
 	/* Get length */
-	length = read_le16(d->source);
+	length = (unsigned int) TINF_READ_SOURCE(d->source);
+	d->source++;
+	length |= (unsigned int) TINF_READ_SOURCE(d->source) << 8;
+	d->source++;
 
 	/* Get one's complement of length */
-	invlength = read_le16(d->source + 2);
+	invlength = (unsigned int) TINF_READ_SOURCE(d->source);
+	d->source++;
+	invlength |= (unsigned int) TINF_READ_SOURCE(d->source) << 8;
+	d->source++;
 
 	/* Check length */
 	if (length != (~invlength & 0x0000FFFF)) {
 		return TINF_DATA_ERROR;
 	}
-
-	d->source += 4;
 
 	if (d->source_end - d->source < length) {
 		return TINF_DATA_ERROR;
@@ -511,7 +488,9 @@ static int tinf_inflate_uncompressed_block(struct tinf_data *d)
 
 	/* Copy block */
 	while (length--) {
-		*d->dest++ = *d->source++;
+		TINF_WRITE_DEST(d->dest, TINF_READ_SOURCE(d->source));
+		d->dest++;
+		d->source++;
 	}
 
 	/* Make sure we start next block on a byte boundary */
@@ -547,53 +526,47 @@ static int tinf_inflate_dynamic_block(struct tinf_data *d)
 
 /* -- Public functions -- */
 
-/* Initialize global (static) data */
-void tinf_init(void)
-{
-	return;
-}
-
 /* Inflate stream from source to dest */
-int tinf_uncompress(void *dest, unsigned int *destLen,
+int tinf_uncompress(struct tinf_data *d,
+                    void *dest, unsigned int *destLen,
                     const void *source, unsigned int sourceLen)
 {
-	struct tinf_data d;
 	int bfinal;
 
 	/* Initialise data */
-	d.source = (const unsigned char *) source;
-	d.source_end = d.source + sourceLen;
-	d.tag = 0;
-	d.bitcount = 0;
-	d.overflow = 0;
+	d->source = (const unsigned char *) source;
+	d->source_end = d->source + sourceLen;
+	d->tag = 0;
+	d->bitcount = 0;
+	d->overflow = 0;
 
-	d.dest = (unsigned char *) dest;
-	d.dest_start = d.dest;
-	d.dest_end = d.dest + *destLen;
+	d->dest = (unsigned char *) dest;
+	d->dest_start = d->dest;
+	d->dest_end = d->dest + *destLen;
 
 	do {
 		unsigned int btype;
 		int res;
 
 		/* Read final block flag */
-		bfinal = tinf_getbits(&d, 1);
+		bfinal = tinf_getbits(d, 1);
 
 		/* Read block type (2 bits) */
-		btype = tinf_getbits(&d, 2);
+		btype = tinf_getbits(d, 2);
 
 		/* Decompress block */
 		switch (btype) {
 		case 0:
 			/* Decompress uncompressed block */
-			res = tinf_inflate_uncompressed_block(&d);
+			res = tinf_inflate_uncompressed_block(d);
 			break;
 		case 1:
 			/* Decompress block with fixed Huffman trees */
-			res = tinf_inflate_fixed_block(&d);
+			res = tinf_inflate_fixed_block(d);
 			break;
 		case 2:
 			/* Decompress block with dynamic Huffman trees */
-			res = tinf_inflate_dynamic_block(&d);
+			res = tinf_inflate_dynamic_block(d);
 			break;
 		default:
 			res = TINF_DATA_ERROR;
@@ -606,11 +579,11 @@ int tinf_uncompress(void *dest, unsigned int *destLen,
 	} while (!bfinal);
 
 	/* Check for overflow in bit reader */
-	if (d.overflow) {
+	if (d->overflow) {
 		return TINF_DATA_ERROR;
 	}
 
-	*destLen = d.dest - d.dest_start;
+	*destLen = d->dest - d->dest_start;
 
 	return TINF_OK;
 }

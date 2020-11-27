@@ -26,6 +26,8 @@
 #ifndef TINF_H_INCLUDED
 #define TINF_H_INCLUDED
 
+#include "tinf_config.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -43,6 +45,18 @@ extern "C" {
 #  endif
 #endif
 
+#ifndef TINF_READ_DEST
+#define TINF_READ_DEST(ptr) (*(ptr))
+#endif
+
+#ifndef TINF_WRITE_DEST
+#define TINF_WRITE_DEST(ptr, value) do { (*(ptr)) = (value); } while (0)
+#endif
+
+#ifndef TINF_READ_SOURCE
+#define TINF_READ_SOURCE(ptr) (*(ptr))
+#endif
+
 /**
  * Status codes returned.
  *
@@ -54,12 +68,32 @@ typedef enum {
 	TINF_BUF_ERROR  = -5  /**< Not enough room for output */
 } tinf_error_code;
 
-/**
- * Initialize global data used by tinf.
- *
- * @deprecated No longer required, may be removed in a future version.
- */
-void TINFCC tinf_init(void);
+/* -- Context data structures -- */
+
+struct tinf_tree {
+	unsigned short counts[16]; /* Number of codes with a given length */
+	unsigned short symbols[288]; /* Symbols sorted by code */
+	int max_sym;
+};
+
+struct tinf_data {
+	const unsigned char *source;
+	const unsigned char *source_end;
+	unsigned int tag;
+	int bitcount;
+	int overflow;
+
+	unsigned char *dest_start;
+	unsigned char *dest;
+	unsigned char *dest_end;
+
+#ifdef TINF_DATA_ADDITIONAL
+	TINF_DATA_ADDITIONAL
+#endif
+
+	struct tinf_tree ltree; /* Literal/length tree */
+	struct tinf_tree dtree; /* Distance tree */
+};
 
 /**
  * Decompress `sourceLen` bytes of deflate data from `source` to `dest`.
@@ -70,68 +104,16 @@ void TINFCC tinf_init(void);
  * Reads at most `sourceLen` bytes from `source`.
  * Writes at most `*destLen` bytes to `dest`.
  *
+ * @param d pointer to context structure
  * @param dest pointer to where to place decompressed data
  * @param destLen pointer to variable containing size of `dest`
  * @param source pointer to compressed data
  * @param sourceLen size of compressed data
  * @return `TINF_OK` on success, error code on error
  */
-int TINFCC tinf_uncompress(void *dest, unsigned int *destLen,
+int TINFCC tinf_uncompress(struct tinf_data *d,
+                           void *dest, unsigned int *destLen,
                            const void *source, unsigned int sourceLen);
-
-/**
- * Decompress `sourceLen` bytes of gzip data from `source` to `dest`.
- *
- * The variable `destLen` points to must contain the size of `dest` on entry,
- * and will be set to the size of the decompressed data on success.
- *
- * Reads at most `sourceLen` bytes from `source`.
- * Writes at most `*destLen` bytes to `dest`.
- *
- * @param dest pointer to where to place decompressed data
- * @param destLen pointer to variable containing size of `dest`
- * @param source pointer to compressed data
- * @param sourceLen size of compressed data
- * @return `TINF_OK` on success, error code on error
- */
-int TINFCC tinf_gzip_uncompress(void *dest, unsigned int *destLen,
-                                const void *source, unsigned int sourceLen);
-
-/**
- * Decompress `sourceLen` bytes of zlib data from `source` to `dest`.
- *
- * The variable `destLen` points to must contain the size of `dest` on entry,
- * and will be set to the size of the decompressed data on success.
- *
- * Reads at most `sourceLen` bytes from `source`.
- * Writes at most `*destLen` bytes to `dest`.
- *
- * @param dest pointer to where to place decompressed data
- * @param destLen pointer to variable containing size of `dest`
- * @param source pointer to compressed data
- * @param sourceLen size of compressed data
- * @return `TINF_OK` on success, error code on error
- */
-int TINFCC tinf_zlib_uncompress(void *dest, unsigned int *destLen,
-                                const void *source, unsigned int sourceLen);
-
-/**
- * Compute Adler-32 checksum of `length` bytes starting at `data`.
- *
- * @param data pointer to data
- * @param length size of data
- * @return Adler-32 checksum
- */
-unsigned int TINFCC tinf_adler32(const void *data, unsigned int length);
-
-/**
- * Compute CRC32 checksum of `length` bytes starting at `data`.
- *
- * @param data pointer to data
- * @param length size of data
- * @return CRC32 checksum
- */
-unsigned int TINFCC tinf_crc32(const void *data, unsigned int length);
 
 #ifdef __cplusplus
 } /* extern "C" */
